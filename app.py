@@ -1,139 +1,216 @@
-from flask import Flask, request, jsonify
 import sqlite3
+import tkinter as tk
+from tkinter import ttk, messagebox
 from datetime import datetime
 
-app = Flask(__name__)
+class CRMApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Customer Relationship Management")
+        self.root.geometry("800x600")
 
-# Initialize SQLite database
-def init_db():
-    with sqlite3.connect('crm.db') as conn:
-        c = conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS customers
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                      name TEXT NOT NULL,
-                      email TEXT UNIQUE NOT NULL,
-                      phone TEXT,
-                      company TEXT,
-                      created_at TEXT)''')
-        conn.commit()
+        # Initialize database
+        self.init_db()
 
-# Helper function to convert database rows to dictionaries
-def row_to_dict(row):
-    return {
-        'id': row[0],
-        'name': row[1],
-        'email': row[2],
-        'phone': row[3],
-        'company': row[4],
-        'created_at': row[5]
-    }
+        # GUI Components
+        self.create_widgets()
 
-# Create a new customer
-@app.route('/api/customers', methods=['POST'])
-def create_customer():
-    try:
-        data = request.get_json()
-        if not data or not all(key in data for key in ['name', 'email']):
-            return jsonify({'error': 'Name and email are required'}), 400
+    def init_db(self):
+        """Initialize SQLite database."""
+        with sqlite3.connect('crm.db') as conn:
+            c = conn.cursor()
+            c.execute('''CREATE TABLE IF NOT EXISTS customers
+                         (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                          name TEXT NOT NULL,
+                          email TEXT UNIQUE NOT NULL,
+                          phone TEXT,
+                          company TEXT,
+                          created_at TEXT)''')
+            conn.commit()
 
-        name = data['name']
-        email = data['email']
-        phone = data.get('phone', '')
-        company = data.get('company', '')
+    def create_widgets(self):
+        """Create GUI widgets."""
+        # Input Frame
+        input_frame = ttk.LabelFrame(self.root, text="Customer Details", padding=10)
+        input_frame.pack(pady=10, padx=10, fill="x")
+
+        # Input Fields
+        ttk.Label(input_frame, text="Name:").grid(row=0, column=0, padx=5, pady=5, sticky="e")
+        self.name_entry = ttk.Entry(input_frame)
+        self.name_entry.grid(row=0, column=1, padx=5, pady=5)
+
+        ttk.Label(input_frame, text="Email:").grid(row=1, column=0, padx=5, pady=5, sticky="e")
+        self.email_entry = ttk.Entry(input_frame)
+        self.email_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        ttk.Label(input_frame, text="Phone:").grid(row=2, column=0, padx=5, pady=5, sticky="e")
+        self.phone_entry = ttk.Entry(input_frame)
+        self.phone_entry.grid(row=2, column=1, padx=5, pady=5)
+
+        ttk.Label(input_frame, text="Company:").grid(row=3, column=0, padx=5, pady=5, sticky="e")
+        self.company_entry = ttk.Entry(input_frame)
+        self.company_entry.grid(row=3, column=1, padx=5, pady=5)
+
+        # Buttons
+        button_frame = ttk.Frame(input_frame)
+        button_frame.grid(row=4, column=0, columnspan=2, pady=10)
+
+        ttk.Button(button_frame, text="Add Customer", command=self.add_customer).grid(row=0, column=0, padx=5)
+        ttk.Button(button_frame, text="Update Customer", command=self.update_customer).grid(row=0, column=1, padx=5)
+        ttk.Button(button_frame, text="Delete Customer", command=self.delete_customer).grid(row=0, column=2, padx=5)
+        ttk.Button(button_frame, text="Clear Fields", command=self.clear_fields).grid(row=0, column=3, padx=5)
+
+        # Customer List
+        tree_frame = ttk.LabelFrame(self.root, text="Customers", padding=10)
+        tree_frame.pack(pady=10, padx=10, fill="both", expand=True)
+
+        self.tree = ttk.Treeview(tree_frame, columns=("ID", "Name", "Email", "Phone", "Company", "Created At"), show="headings")
+        self.tree.heading("ID", text="ID")
+        self.tree.heading("Name", text="Name")
+        self.tree.heading("Email", text="Email")
+        self.tree.heading("Phone", text="Phone")
+        self.tree.heading("Company", text="Company")
+        self.tree.heading("Created At", text="Created At")
+        self.tree.column("ID", width=50)
+        self.tree.column("Name", width=150)
+        self.tree.column("Email", width=200)
+        self.tree.column("Phone", width=100)
+        self.tree.column("Company", width=150)
+        self.tree.column("Created At", width=150)
+        self.tree.pack(fill="both", expand=True)
+
+        # Bind selection event
+        self.tree.bind("<<TreeviewSelect>>", self.on_select)
+
+        # Load customers
+        self.load_customers()
+
+    def load_customers(self):
+        """Load customers into Treeview."""
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        try:
+            with sqlite3.connect('crm.db') as conn:
+                conn.row_factory = sqlite3.Row
+                c = conn.cursor()
+                c.execute('SELECT * FROM customers')
+                for row in c.fetchall():
+                    self.tree.insert("", "end", values=(row['id'], row['name'], row['email'], row['phone'], row['company'], row['created_at']))
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load customers: {str(e)}")
+
+    def add_customer(self):
+        """Add a new customer."""
+        name = self.name_entry.get().strip()
+        email = self.email_entry.get().strip()
+        phone = self.phone_entry.get().strip()
+        company = self.company_entry.get().strip()
         created_at = datetime.utcnow().isoformat()
 
-        with sqlite3.connect('crm.db') as conn:
-            c = conn.cursor()
-            c.execute('INSERT INTO customers (name, email, phone, company, created_at) VALUES (?, ?, ?, ?, ?)',
-                      (name, email, phone, company, created_at))
-            conn.commit()
-            customer_id = c.lastrowid
+        if not name or not email:
+            messagebox.showerror("Error", "Name and email are required")
+            return
 
-        return jsonify({
-            'id': customer_id,
-            'name': name,
-            'email': email,
-            'phone': phone,
-            'company': company,
-            'created_at': created_at
-        }), 201
-    except sqlite3.IntegrityError:
-        return jsonify({'error': 'Email already exists'}), 400
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        try:
+            with sqlite3.connect('crm.db') as conn:
+                c = conn.cursor()
+                c.execute('INSERT INTO customers (name, email, phone, company, created_at) VALUES (?, ?, ?, ?, ?)',
+                          (name, email, phone, company, created_at))
+                conn.commit()
+            self.load_customers()
+            self.clear_fields()
+            messagebox.showinfo("Success", "Customer added successfully")
+        except sqlite3.IntegrityError:
+            messagebox.showerror("Error", "Email already exists")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to add customer: {str(e)}")
 
-# Get all customers or a specific customer by ID
-@app.route('/api/customers', methods=['GET'])
-@app.route('/api/customers/<int:id>', methods=['GET'])
-def get_customers(id=None):
-    try:
-        with sqlite3.connect('crm.db') as conn:
-            conn.row_factory = sqlite3.Row
-            c = conn.cursor()
-            if id:
-                c.execute('SELECT * FROM customers WHERE id = ?', (id,))
-                row = c.fetchone()
-                if not row:
-                    return jsonify({'error': 'Customer not found'}), 404
-                return jsonify(row_to_dict(row)), 200
-            else:
-                c.execute('SELECT * FROM customers')
-                rows = c.fetchall()
-                return jsonify([row_to_dict(row) for row in rows]), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    def update_customer(self):
+        """Update selected customer."""
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showerror("Error", "Select a customer to update")
+            return
 
-# Update a customer
-@app.route('/api/customers/<int:id>', methods=['PUT'])
-def update_customer(id):
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
+        customer_id = self.tree.item(selected[0])['values'][0]
+        name = self.name_entry.get().strip()
+        email = self.email_entry.get().strip()
+        phone = self.phone_entry.get().strip()
+        company = self.company_entry.get().strip()
 
-        with sqlite3.connect('crm.db') as conn:
-            c = conn.cursor()
-            c.execute('SELECT * FROM customers WHERE id = ?', (id,))
-            if not c.fetchone():
-                return jsonify({'error': 'Customer not found'}), 404
+        if not name and not email and not phone and not company:
+            messagebox.showerror("Error", "At least one field must be provided")
+            return
 
-            updates = []
-            params = []
-            for key in ['name', 'email', 'phone', 'company']:
-                if key in data:
-                    updates.append(f"{key} = ?")
-                    params.append(data[key])
-            if not updates:
-                return jsonify({'error': 'No valid fields to update'}), 400
+        try:
+            with sqlite3.connect('crm.db') as conn:
+                c = conn.cursor()
+                updates = []
+                params = []
+                if name:
+                    updates.append("name = ?")
+                    params.append(name)
+                if email:
+                    updates.append("email = ?")
+                    params.append(email)
+                if phone:
+                    updates.append("phone = ?")
+                    params.append(phone)
+                if company:
+                    updates.append("company = ?")
+                    params.append(company)
+                if not updates:
+                    return
 
-            params.append(id)
-            c.execute(f"UPDATE customers SET {', '.join(updates)} WHERE id = ?", params)
-            conn.commit()
+                params.append(customer_id)
+                c.execute(f"UPDATE customers SET {', '.join(updates)} WHERE id = ?", params)
+                conn.commit()
+            self.load_customers()
+            self.clear_fields()
+            messagebox.showinfo("Success", "Customer updated successfully")
+        except sqlite3.IntegrityError:
+            messagebox.showerror("Error", "Email already exists")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to update customer: {str(e)}")
 
-            c.execute('SELECT * FROM customers WHERE id = ?', (id,))
-            row = c.fetchone()
-            return jsonify(row_to_dict(row)), 200
-    except sqlite3.IntegrityError:
-        return jsonify({'error': 'Email already exists'}), 400
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    def delete_customer(self):
+        """Delete selected customer."""
+        selected = self.tree.selection()
+        if not selected:
+            messagebox.showerror("Error", "Select a customer to delete")
+            return
 
-# Delete a customer
-@app.route('/api/customers/<int:id>', methods=['DELETE'])
-def delete_customer(id):
-    try:
-        with sqlite3.connect('crm.db') as conn:
-            c = conn.cursor()
-            c.execute('SELECT * FROM customers WHERE id = ?', (id,))
-            if not c.fetchone():
-                return jsonify({'error': 'Customer not found'}), 404
+        customer_id = self.tree.item(selected[0])['values'][0]
+        try:
+            with sqlite3.connect('crm.db') as conn:
+                c = conn.cursor()
+                c.execute('DELETE FROM customers WHERE id = ?', (customer_id,))
+                conn.commit()
+            self.load_customers()
+            self.clear_fields()
+            messagebox.showinfo("Success", "Customer deleted successfully")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to delete customer: {str(e)}")
 
-            c.execute('DELETE FROM customers WHERE id = ?', (id,))
-            conn.commit()
-            return jsonify({'message': 'Customer deleted successfully'}), 200
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+    def clear_fields(self):
+        """Clear input fields."""
+        self.name_entry.delete(0, tk.END)
+        self.email_entry.delete(0, tk.END)
+        self.phone_entry.delete(0, tk.END)
+        self.company_entry.delete(0, tk.END)
 
-if __name__ == '__main__':
-    init_db()
-    app.run(debug=True)
+    def on_select(self, event):
+        """Populate fields when a customer is selected."""
+        selected = self.tree.selection()
+        if selected:
+            values = self.tree.item(selected[0])['values']
+            self.clear_fields()
+            self.name_entry.insert(0, values[1])
+            self.email_entry.insert(0, values[2])
+            self.phone_entry.insert(0, values[3])
+            self.company_entry.insert(0, values[4])
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = CRMApp(root)
+    root.mainloop()
