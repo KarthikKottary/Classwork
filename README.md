@@ -1,19 +1,15 @@
 # Classwork
 
-A simple desktop CRM application built with Python and `tkinter`. It allows users to manage customer records (create, read, update, delete) using a graphical interface, with data stored in a SQLite database.
+# CRM Web Application
 
-## Features
-- Add new customers with name, email, phone, and company details.
-- View all customers in a table.
-- Update or delete existing customers.
-- Clear input fields for ease of use.
+A simple Customer Relationship Management (CRM) web application built with Flask, SQLite, and Bootstrap. It allows users to add, update, delete, and view customer records.
 
 ## Prerequisites
-- Python 3.6 or higher (includes `tkinter` and `sqlite3` in the standard library).
-- A desktop operating system (Windows, macOS, or Linux) to run the GUI.
+- Python 3.8+
+- Git
 
-## Installation
-1. Clone the repository:
+## Setup Instructions
+1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/your-username/crm-gui-app.git
-   cd crm-gui-app
+   git clone https://github.com/<your-username>/crm_web_app.git
+   cd crm_web_app
